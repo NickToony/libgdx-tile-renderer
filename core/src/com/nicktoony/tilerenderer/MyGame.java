@@ -62,7 +62,7 @@ public class MyGame extends ApplicationAdapter {
 //		}
 
 //		renderer = new CustomOrthoRenderer(map, 1, 70000);
-		renderer = new CustomIsoRenderer(map, 70000);
+		renderer = new CustomIsoRendererYSort(map);
 //		renderer = new OrthogonalTiledMapRenderer(map);
 	}
 

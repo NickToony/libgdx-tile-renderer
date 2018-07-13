@@ -39,7 +39,7 @@ import java.util.List;
 
 import static com.badlogic.gdx.graphics.g2d.Batch.*;
 
-public class CustomIsoRenderer extends BatchTiledMapRenderer {
+public class CustomIsoRendererYSort extends BatchTiledMapRenderer {
 
     static private final float tolerance = 0.00001f;
     static private final int MAX_PER_BATCH = 8000;
@@ -64,42 +64,28 @@ public class CustomIsoRenderer extends BatchTiledMapRenderer {
     protected boolean canCacheMoreN, canCacheMoreE, canCacheMoreW, canCacheMoreS;
     private float extraWidth;
     private float extraHeight;
-
-    private Cache currentCache = null;
-    private int cacheCount = 0;
-    private int totalCacheCount = 0;
-    private int cacheIndex = 0;
+    private Matrix4 projection = new Matrix4();
 
     class Cache {
         SpriteCache cache;
         boolean render;
 
-        public Cache() {
-            cache = new SpriteCache(MAX_PER_BATCH, true);
+        public Cache(int size) {
             render = false;
-        }
-
-        public void dispose() {
-            cache.dispose();
+            cache = new SpriteCache(size, true);
         }
     }
 
-    public CustomIsoRenderer(TiledMap map, int size) {
+    public CustomIsoRendererYSort(TiledMap map) {
         super(map);
         init();
 
         // Rows/caches
         caches = new ArrayList<Cache>();
-//        int rowCount = Math.max(map.getLayers().getByType(TiledMapTileLayer.class).first().getWidth(),
-//                map.getLayers().getByType(TiledMapTileLayer.class).first().getHeight());
-//        for (int i = 0; i < rowCount*1.5f; i ++) {
-//            caches.add(new Cache(rowCount));
-//        }
-
-        int count = 0;
-        while (count < size) {
-            caches.add(new Cache());
-            count += MAX_PER_BATCH;
+        int rowCount = Math.max(map.getLayers().getByType(TiledMapTileLayer.class).first().getWidth(),
+                map.getLayers().getByType(TiledMapTileLayer.class).first().getHeight());
+        for (int i = 0; i < rowCount*1.5f; i ++) {
+            caches.add(new Cache(rowCount));
         }
     }
 
@@ -162,6 +148,13 @@ public class CustomIsoRenderer extends BatchTiledMapRenderer {
 //        canCacheMoreS = row1 > 0;
 
         for (int row = row2; row >= row1; row--) {
+            if (row < 0) continue;
+            if (row >= caches.size()) continue;
+
+            Cache cache = caches.get(row);
+            cache.cache.clear();
+            cache.cache.beginCache();
+
             for (int col = col1; col <= col2; col++) {
                 float x = (col * halfTileWidth) + (row * halfTileWidth);
                 float y = (row * halfTileHeight) - (col * halfTileHeight);
@@ -274,20 +267,11 @@ public class CustomIsoRenderer extends BatchTiledMapRenderer {
                             }
                         }
                     }
-                    currentCache.cache.add(region.getTexture(), vertices, 0, NUM_VERTICES);
-                    currentCache.render = true;
-                    cacheCount += 1;
-                    totalCacheCount += 1;
-
-                    if (cacheCount >= MAX_PER_BATCH - 1) {
-                        currentCache.cache.endCache();
-                        cacheIndex += 1;
-                        cacheCount = 0;
-                        currentCache = caches.get(cacheIndex);
-                        currentCache.cache.beginCache();
-                    }
+                    cache.cache.add(region.getTexture(), vertices, 0, NUM_VERTICES);
+                    cache.render = true;
                 }
             }
+            cache.cache.endCache();
         }
     }
 
@@ -296,7 +280,7 @@ public class CustomIsoRenderer extends BatchTiledMapRenderer {
         super.dispose();
 
         for (Cache cache : caches) {
-            cache.dispose();
+            cache.cache.dispose();
         }
     }
 
@@ -304,9 +288,7 @@ public class CustomIsoRenderer extends BatchTiledMapRenderer {
     public void render () {
         if (!cached) {
             cached = true;
-            for (int i = 0; i < caches.size(); i ++) {
-                Cache cache = caches.get(i);
-                cache.cache.clear();
+            for (Cache cache: caches) {
                 cache.render = false;
             }
 
@@ -322,15 +304,9 @@ public class CustomIsoRenderer extends BatchTiledMapRenderer {
             extraWidth *= 1;
             extraHeight *= 1;
 
-            cacheIndex = 0;
-            cacheCount = 0;
-            totalCacheCount = 0;
-            currentCache = caches.get(cacheIndex);
-            currentCache.cache.beginCache();
             for (MapLayer layer : map.getLayers()) {
                     renderTileLayer((TiledMapTileLayer)layer);
             }
-            currentCache.cache.endCache();
         }
 
         if (blending) {
@@ -338,31 +314,10 @@ public class CustomIsoRenderer extends BatchTiledMapRenderer {
             Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         }
 
-//        int count = 0;
-//        int index = 0;
-//        Cache cache = caches.get(index);
-//        cache.cache.begin();
-//        MapLayers mapLayers = map.getLayers();
-//        for (int i = 0, j = mapLayers.getCount(); i < j; i++) {
-//            MapLayer layer = mapLayers.get(i);
-//            if (layer.isVisible()) {
-//                cache.cache.draw(i);
-//                renderObjects(layer);
-//                count ++;
-//
-//                if (count >= MAX_PER_BATCH - 1) {
-//                    cache.cache.end();
-//                    index += 1;
-//                    count = 0;
-//                    cache = caches.get(index);
-//                    cache.cache.begin();
-//                }
-//            }
-//        }
-//        cache.cache.end();
-
-        for (Cache cache : caches) {
+        for (int r = caches.size() - 1; r > 0; r --) {
+            Cache cache = caches.get(r);
             if (cache.render) {
+                cache.cache.setProjectionMatrix(projection);
                 cache.cache.begin();
                 MapLayers mapLayers = map.getLayers();
                 for (int i = 0, j = mapLayers.getCount(); i < j; i++) {
@@ -375,60 +330,32 @@ public class CustomIsoRenderer extends BatchTiledMapRenderer {
                 cache.cache.end();
             }
         }
-
-
         if (blending) Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
     @Override
     public void setView (OrthographicCamera camera) {
-        for (Cache cache : caches) {
-            cache.cache.setProjectionMatrix(camera.combined);
-        }
+        this.projection = camera.combined;
         float width = camera.viewportWidth * camera.zoom + maxTileWidth * 2 * unitScale;
         float height = camera.viewportHeight * camera.zoom + maxTileHeight * 2 * unitScale;
         viewBounds.set(camera.position.x - width / 2, camera.position.y - height / 2, width, height);
 
-//        if ((viewBounds.x < cacheBounds.x - tolerance) || //
-//                (viewBounds.y < cacheBounds.y - tolerance) || //
-//                (viewBounds.x + viewBounds.width > cacheBounds.x + cacheBounds.width + tolerance) || //
-//                (viewBounds.y + viewBounds.height > cacheBounds.y + cacheBounds.height + tolerance) //
-//                ) cached = false;
-//
-//        if ((Math.abs(viewBounds.x - cacheBounds.x) > extraWidth) || //
-//                (Math.abs(viewBounds.y - cacheBounds.y) > extraHeight) || //
-//                (Math.abs((viewBounds.x + viewBounds.width) - (cacheBounds.x + cacheBounds.width)) >  extraWidth) || //
-//                (Math.abs((viewBounds.y + viewBounds.height) - (cacheBounds.y + cacheBounds.height)) >  extraHeight) //
-//                ) cached = false;
-
-//        if (Math.abs(viewBounds.area() - cacheBounds.area()) > extraWidth*extraHeight*2) {
-//            cached = false;
-//        }
-
-            float areaDiff = Math.abs(1 - (viewBounds.area() / cacheBounds.area()));
-            float xDiff = Math.abs(viewBounds.x -  cacheBounds.x);
-            float yDiff = Math.abs(viewBounds.y -  cacheBounds.y);
-            if (areaDiff > 0.2f || xDiff >= extraWidth || yDiff >= extraHeight) {
-                cached = false;
-            }
+        float areaDiff = Math.abs(1 - (viewBounds.area() / cacheBounds.area()));
+        float xDiff = Math.abs(viewBounds.x -  cacheBounds.x);
+        float yDiff = Math.abs(viewBounds.y -  cacheBounds.y);
+        if (areaDiff > 0.2f || xDiff >= extraWidth || yDiff >= extraHeight) {
+            cached = false;
+        }
     }
 
     @Override
     public void setView (Matrix4 projection, float x, float y, float width, float height) {
-        for (Cache cache : caches) {
-            cache.cache.setProjectionMatrix(projection);
-        }
+        this.projection = projection;
         x -= maxTileWidth * unitScale;
         y -= maxTileHeight * unitScale;
         width += maxTileWidth * 2 * unitScale;
         height += maxTileHeight * 2 * unitScale;
         viewBounds.set(x, y, width, height);
-
-//        if ((viewBounds.x < cacheBounds.x - tolerance) || //
-//                ( viewBounds.y < cacheBounds.y - tolerance) || //
-//                (viewBounds.x + viewBounds.width > cacheBounds.x + cacheBounds.width + tolerance) || //
-//                ( viewBounds.y + viewBounds.height > cacheBounds.y + cacheBounds.height + tolerance) //
-//                ) cached = false;
 
         float areaDiff = Math.abs(1 - (viewBounds.area() / cacheBounds.area()));
         float xDiff = Math.abs(viewBounds.x -  cacheBounds.x);
