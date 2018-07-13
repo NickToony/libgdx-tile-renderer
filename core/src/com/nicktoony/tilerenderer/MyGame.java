@@ -3,7 +3,6 @@ package com.nicktoony.tilerenderer;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
-import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
@@ -17,7 +16,6 @@ import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.maps.tiled.tiles.StaticTiledMapTile;
 
 public class MyGame extends ApplicationAdapter {
-	private AssetManager assetManager;
 	private OrthographicCamera camera;
 	private Texture tiles;
 	private BitmapFont font;
@@ -25,8 +23,8 @@ public class MyGame extends ApplicationAdapter {
 	private TiledMap map;
 	private TiledMapRenderer renderer;
 
-	private static final int MAP_WIDTH = 256;
-	private static final int MAP_HEIGHT = 256;
+	private static final int MAP_WIDTH = 512;
+	private static final int MAP_HEIGHT = 512;
 
 	@Override
 	public void create () {
@@ -61,8 +59,9 @@ public class MyGame extends ApplicationAdapter {
 			System.out.println("Count: " + count);
 //		}
 
-//		renderer = new CustomOrthoRenderer(map, 1, 70000);
-		renderer = new CustomIsoRendererYSort(map);
+//		renderer = new CustomOrthoRenderer(map, 1, MAP_WIDTH * MAP_HEIGHT);
+//		renderer = new CustomIsoRendererYSort(map);
+		renderer = new CustomIsoRenderer(map, MAP_WIDTH * MAP_HEIGHT);
 //		renderer = new OrthogonalTiledMapRenderer(map);
 	}
 
@@ -76,7 +75,7 @@ public class MyGame extends ApplicationAdapter {
 
 		camera.position.x += -(left ? 10 : 0) + (right ? 10 : 0);
 		camera.position.y += (up ? 10 : 0) - (down ? 10 : 0);
-		camera.zoom = Math.max(0.1f, camera.zoom -(zoomOut ? 0.1f : 0) + (zoomIn ? 0.1f : 0));
+		camera.zoom = Math.max(0.7f, camera.zoom -(zoomOut ? 0.1f : 0) + (zoomIn ? 0.1f : 0));
 		camera.update();
 	}
 

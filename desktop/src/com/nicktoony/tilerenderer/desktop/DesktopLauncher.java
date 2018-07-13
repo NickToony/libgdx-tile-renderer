@@ -9,6 +9,9 @@ public class DesktopLauncher {
 		LwjglApplicationConfiguration config = new LwjglApplicationConfiguration();
 		config.vSyncEnabled = false;
 		config.foregroundFPS = 9999;
+		config.title = "LibGDX Tile Renderer";
+		config.width = 1280;
+		config.height = 800;
 		new LwjglApplication(new MyGame(), config);
 	}
 }
